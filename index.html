@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Limitless — Gojo VFX (browser)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --blue: #4db5ff; --red: #ff4d4d; --purple: #b079ff; --ink: #dbe6ff;
+    --panel: rgba(8, 12, 22, 0.6); --line: rgba(120, 160, 255, 0.3);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #02040a; }
+  body { font-family: "JetBrains Mono", monospace; color: var(--ink); }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+        transform: scaleX(-1); filter: brightness(0.5) saturate(0.8); transition: filter .6s; }
+  body.domain #bg { filter: invert(1) brightness(0.45) contrast(1.2) saturate(0); }
+  #atmos { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+           background: radial-gradient(120% 90% at 50% 50%, transparent 50%, rgba(2,4,10,0.9) 100%); }
+  #scene { position: fixed; inset: 0; z-index: 2; }
+
+  #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+  .panel { position: absolute; background: var(--panel); border: 1px solid var(--line);
+           backdrop-filter: blur(3px); padding: 12px 16px; }
+  .panel::before, .panel::after { content: ""; position: absolute; width: 12px; height: 12px;
+           border: 2px solid var(--blue); }
+  .panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .label { font-family: "Chakra Petch"; font-size: 10px; letter-spacing: 2px;
+           text-transform: uppercase; color: var(--blue); opacity: 0.85; }
+
+  #channel { top: 22px; left: 22px; min-width: 200px; }
+  .hrow { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; letter-spacing: 1px; }
+  .e.BLUE { color: var(--blue); } .e.RED { color: var(--red); } .e.none { color: rgba(219,230,255,0.4); }
+
+  #trackpanel { top: 22px; right: 22px; text-align: right; min-width: 160px; }
+  #track { font-size: 10px; letter-spacing: 1px; margin-top: 6px; }
+  #dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+         background: var(--red); margin-right: 5px; }
+  #dot.on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+
+  #controls { bottom: 20px; right: 22px; font-size: 10.5px; letter-spacing: 1px;
+              color: rgba(219,230,255,0.7); min-width: 150px; }
+  #controls b { color: var(--blue); }
+  #infstate { margin-top: 5px; color: rgba(219,230,255,0.5); }
+  #infstate.on { color: var(--blue); }
+
+  #legend { bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center;
+            font-size: 10.5px; letter-spacing: 0.5px; color: rgba(219,230,255,0.72);
+            display: flex; gap: 16px; white-space: nowrap; }
+  #legend b { font-weight: 500; }
+
+  #banner { position: fixed; top: 16%; left: 0; right: 0; z-index: 4; text-align: center;
+            pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #banner.on { opacity: 1; }
+  #banner .jp { font-family: "Noto Sans JP"; font-weight: 700; font-size: 46px; letter-spacing: 8px;
+                color: var(--purple); text-shadow: 0 0 30px rgba(176,121,255,0.8); }
+  #banner .en { font-family: "Chakra Petch"; font-weight: 700; font-size: 16px; letter-spacing: 6px;
+                margin-top: 4px; color: var(--purple); opacity: 0.85; }
+
+  #charge { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center;
+            justify-content: center; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  #charge.on { opacity: 1; }
+  #charge .dial { --p: 0; width: 168px; height: 168px; border-radius: 50%;
+    background: conic-gradient(var(--purple) calc(var(--p) * 1%), rgba(255,255,255,0.07) 0);
+    -webkit-mask: radial-gradient(transparent 62%, #000 63%); mask: radial-gradient(transparent 62%, #000 63%); }
+  #charge .lbl { position: absolute; font-family: "Chakra Petch"; font-size: 11px;
+                 letter-spacing: 3px; color: var(--purple); }
+
+  #domain { position: fixed; inset: 0; z-index: 5; opacity: 0; pointer-events: none;
+            transition: opacity .7s; display: flex; align-items: center; justify-content: center;
+            flex-direction: column; overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, rgba(22,20,34,0.55), rgba(0,0,0,0.95)); }
+  #domain.on { opacity: 1; }
+  #domain .ring { position: absolute; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); }
+  #domain .r1 { width: 200vmax; height: 200vmax; animation: spin 22s linear infinite;
+    background: conic-gradient(from 0deg, transparent, rgba(176,121,255,0.16), transparent 40%,
+      rgba(120,180,255,0.12), transparent 70%); }
+  #domain .r2 { width: 150vmax; height: 150vmax; animation: spin 14s linear infinite reverse;
+    background: conic-gradient(from 120deg, transparent, rgba(255,255,255,0.06), transparent 50%); }
+  @keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+  #domain .jp { position: relative; font-family: "Noto Sans JP"; font-weight: 700; font-size: 76px;
+                letter-spacing: 12px; color: #fff; text-shadow: 0 0 36px rgba(160,170,255,0.9); }
+  #domain .en { position: relative; font-family: "Chakra Petch"; font-weight: 700; font-size: 15px;
+                letter-spacing: 8px; color: rgba(220,225,255,0.9); margin-top: 10px; }
+
+  #enter { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center;
+           justify-content: center; flex-direction: column; gap: 12px; text-align: center;
+           background: radial-gradient(60% 60% at 50% 45%, rgba(14,16,30,0.8), rgba(2,4,10,0.97));
+           transition: opacity .5s; }
+  #enter.hidden { opacity: 0; pointer-events: none; }
+  #enter .jp { font-family: "Noto Sans JP"; font-weight: 700; font-size: 30px; letter-spacing: 10px;
+               color: var(--blue); opacity: 0.85; }
+  #enter .title { font-family: "Chakra Petch"; font-weight: 700; font-size: 60px; letter-spacing: 10px;
+                  color: #fff; text-shadow: 0 0 30px rgba(120,170,255,0.6); }
+  #enter-msg { font-size: 12px; letter-spacing: 1px; color: rgba(219,230,255,0.7); min-height: 18px; }
+  #enterBtn { margin-top: 8px; font-family: "Chakra Petch"; font-weight: 700; font-size: 15px;
+              letter-spacing: 3px; color: #02040a; background: var(--blue); border: none;
+              padding: 12px 34px; cursor: pointer; transition: transform .15s, opacity .2s; }
+  #enterBtn:disabled { opacity: 0.4; cursor: default; }
+  #enterBtn:not(:disabled):hover { transform: translateY(-2px); }
+  #enter .hint { font-size: 10.5px; letter-spacing: 1px; color: rgba(219,230,255,0.45); margin-top: 10px; }
+</style>
+</head>
+<body>
+  <video id="bg" autoplay playsinline muted></video>
+  <div id="atmos"></div>
+  <canvas id="scene"></canvas>
+
+  <div id="hud">
+    <div id="channel" class="panel">
+      <div class="label">cursed energy</div>
+      <div class="hrow"><span>left hand</span><span class="e none" id="e-Left">—</span></div>
+      <div class="hrow"><span>right hand</span><span class="e none" id="e-Right">—</span></div>
+    </div>
+    <div id="trackpanel" class="panel">
+      <div class="label">tracking</div>
+      <div id="track"><span id="dot"></span><span id="track-txt">idle</span></div>
+    </div>
+    <div id="controls" class="panel">
+      <div class="label">controls</div>
+      <div style="margin-top:6px"><b>I</b> infinity&nbsp;&nbsp;<b>B</b> bloom</div>
+      <div id="infstate">infinity: off</div>
+    </div>
+    <div id="legend" class="panel">
+      <div><b style="color:var(--blue)">OK-sign</b> → Blue</div>
+      <div><b style="color:var(--red)">open palm</b> → Red</div>
+      <div><b style="color:var(--purple)">Blue+Red together</b> → Purple</div>
+      <div><b>both fists, hold</b> → Domain</div>
+    </div>
+  </div>
+
+  <div id="banner"><div class="jp">虚式「茈」</div><div class="en">HOLLOW TECHNIQUE: PURPLE</div></div>
+  <div id="charge"><div class="dial" id="dial"></div><div class="lbl">EXPANDING</div></div>
+  <div id="domain"><div class="ring r1"></div><div class="ring r2"></div>
+    <div class="jp">無量空処</div><div class="en">DOMAIN EXPANSION · UNLIMITED VOID</div></div>
+
+  <div id="enter">
+    <div class="jp">無下限</div>
+    <div class="title">LIMITLESS</div>
+    <div id="enter-msg">loading hand model…</div>
+    <button id="enterBtn" disabled>BEGIN</button>
+    <div class="hint">needs a webcam · runs entirely in your browser</div>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { FilesetResolver, HandLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const COL = { BLUE: 0x4db5ff, RED: 0xff4d4d, PURPLE: 0xb079ff, IDLE: 0x9fc2ff };
+const $ = (id) => document.getElementById(id);
+
+// ======================= AUDIO ========================================== //
+class AudioEngine {
+  constructor() { this.ready = false; }
+  init() {
+    if (this.ctx) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+    const ctx = this.ctx = new Ctx();
+    this.master = ctx.createGain(); this.master.gain.value = 0; this.master.connect(ctx.destination);
+    this.master.gain.linearRampToValueAtTime(0.85, ctx.currentTime + 0.6);
+    this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = this.noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    this.blue = this._drone(165, "sine", 1000); this.red = this._drone(70, "sawtooth", 600);
+    this.ready = true;
+  }
+  _drone(freq, type, lpf) {
+    const ctx = this.ctx, o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+    o1.type = o2.type = type; o1.frequency.value = freq; o2.frequency.value = freq * 1.006;
+    const g = ctx.createGain(); g.gain.value = 0;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = lpf;
+    o1.connect(g); o2.connect(g); g.connect(lp); lp.connect(this.master); o1.start(); o2.start();
+    return { o1, g, lp, freq };
+  }
+  setCharge(b, r) {
+    if (!this.ready) return; const t = this.ctx.currentTime;
+    this.blue.g.gain.setTargetAtTime(b * 0.16, t, 0.08);
+    this.blue.o1.frequency.setTargetAtTime(this.blue.freq + b * 50, t, 0.12);
+    this.red.g.gain.setTargetAtTime(r * 0.18, t, 0.08);
+    this.red.lp.frequency.setTargetAtTime(400 + r * 1400, t, 0.12);
+  }
+  boom(o = {}) {
+    if (!this.ready) return; const ctx = this.ctx, t = ctx.currentTime, dur = o.dur || 0.9;
+    const sub = ctx.createOscillator(); sub.type = "sine"; const sg = ctx.createGain();
+    sub.frequency.setValueAtTime(o.f0 || 150, t); sub.frequency.exponentialRampToValueAtTime(o.f1 || 38, t + dur);
+    sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(o.vol || 0.9, t + 0.02);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    sub.connect(sg); sg.connect(this.master); sub.start(t); sub.stop(t + dur + 0.1);
+    const n = ctx.createBufferSource(); n.buffer = this.noise; const nf = ctx.createBiquadFilter();
+    nf.type = "lowpass"; nf.frequency.setValueAtTime(o.nf0 || 2200, t);
+    nf.frequency.exponentialRampToValueAtTime(o.nf1 || 180, t + 0.5);
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(o.nvol || 0.5, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    n.connect(nf); nf.connect(ng); ng.connect(this.master); n.start(t); n.stop(t + 0.7);
+  }
+  beam(on) {
+    if (!this.ready) return; const t = this.ctx.currentTime;
+    if (on && !this._beam) {
+      const ctx = this.ctx, n = ctx.createBufferSource(); n.buffer = this.noise; n.loop = true;
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 300; bp.Q.value = 0.7;
+      const g = ctx.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(0.32, t, 0.12);
+      n.connect(bp); bp.connect(g); g.connect(this.master); n.start(); this._beam = { n, g };
+    } else if (!on && this._beam) {
+      this._beam.g.gain.setTargetAtTime(0, t, 0.18); this._beam.n.stop(t + 0.5); this._beam = null;
+    }
+  }
+  domain(on) {
+    if (!this.ready) return; const ctx = this.ctx, t = ctx.currentTime;
+    if (on && !this._dom) {
+      this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this.master.gain.value, t);
+      this.master.gain.linearRampToValueAtTime(0.08, t + 0.12);
+      this.master.gain.linearRampToValueAtTime(0.95, t + 0.7);
+      this.boom({ f0: 95, f1: 28, dur: 1.5, vol: 1.0, nf0: 1400, nf1: 110, nvol: 0.7 });
+      const mk = (f, ty) => { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f; return o; };
+      const o1 = mk(110, "sine"), o2 = mk(165, "sine"), o3 = mk(55, "triangle");
+      const g = ctx.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(0.14, t + 0.5, 0.5);
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1300;
+      [o1, o2, o3].forEach(o => { o.connect(g); o.start(); }); g.connect(lp); lp.connect(this.master);
+      this._dom = { os: [o1, o2, o3], g };
+    } else if (!on && this._dom) {
+      this._dom.g.gain.setTargetAtTime(0, t, 0.4); this._dom.os.forEach(o => o.stop(t + 1.2)); this._dom = null;
+      this.master.gain.setTargetAtTime(0.85, t, 0.35);
+    }
+  }
+}
+const audio = new AudioEngine();
+
+// ======================= THREE.JS ======================================= //
+const canvas = $("scene"), video = $("bg");
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const CAM_Z = 6;
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 0, CAM_Z);
+scene.add(new THREE.AmbientLight(0x334466, 1.0));
+const fill = new THREE.PointLight(0x88aaff, 30, 30); fill.position.set(0, 0, 6); scene.add(fill);
+
+let halfH, halfW;
+function computeBounds() { halfH = Math.tan((camera.fov / 2) * Math.PI / 180) * CAM_Z; halfW = halfH * camera.aspect; }
+computeBounds();
+function palmToWorld(px, py) { return new THREE.Vector3((px - 0.5) * 2 * halfW, (0.5 - py) * 2 * halfH, 0); }
+
+const bursts = [];
+function burstAt(pos, color, n = 12) {
+  const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), v = [];
+  for (let i = 0; i < n; i++) { p[i*3]=pos.x; p[i*3+1]=pos.y; p[i*3+2]=pos.z;
+    const a = Math.random()*Math.PI*2, s = 2+Math.random()*3;
+    v.push(new THREE.Vector3(Math.cos(a)*s, Math.sin(a)*s, (Math.random()-0.5)*2)); }
+  g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color, size: 0.14, transparent: true,
+    opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+  scene.add(pts); bursts.push({ pts, v, life: 1 });
+}
+
+class HandFX {
+  constructor() {
+    this.mode = "OFF"; this.vis = 0; this.present = false; this.targetPos = new THREE.Vector3();
+    this.group = new THREE.Group(); scene.add(this.group);
+    this.orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 2), new THREE.MeshBasicMaterial({ color: COL.IDLE }));
+    this.halo = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 24),
+      new THREE.MeshBasicMaterial({ color: COL.IDLE, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.light = new THREE.PointLight(COL.IDLE, 0, 6);
+    this.group.add(this.orb, this.halo, this.light);
+    this.N = 260; this.pos = new Float32Array(this.N * 3);
+    for (let i = 0; i < this.N; i++) this._seed(this.pos, i, 1.4);
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(this.pos, 3));
+    this.pmat = new THREE.PointsMaterial({ color: COL.IDLE, size: 0.05, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.points = new THREE.Points(g, this.pmat); this.group.add(this.points);
+  }
+  _seed(arr, i, r) {
+    const a = Math.random()*Math.PI*2, b = Math.acos(2*Math.random()-1), rr = r*(0.7+Math.random()*0.4);
+    arr[i*3]=Math.sin(b)*Math.cos(a)*rr; arr[i*3+1]=Math.sin(b)*Math.sin(a)*rr; arr[i*3+2]=Math.cos(b)*rr*0.45;
+  }
+  setMode(m) { if (m === this.mode) return; this.mode = m;
+    const c = m==="RED"?COL.RED : m==="BLUE"?COL.BLUE : COL.IDLE;
+    this.orb.material.color.setHex(c); this.halo.material.color.setHex(c); this.pmat.color.setHex(c); this.light.color.setHex(c); }
+  update(dt) {
+    const charging = this.mode==="BLUE" || this.mode==="RED";
+    const tgt = this.present ? (charging?1.0:0.42) : 0;
+    this.vis += (tgt - this.vis) * 0.18; this.group.visible = this.vis > 0.02; if (!this.group.visible) return;
+    this.group.position.lerp(this.targetPos, 0.45);
+    this.orb.scale.setScalar(this.vis*(0.9+Math.sin(performance.now()*0.006)*0.08));
+    this.halo.scale.setScalar(this.vis);
+    this.light.intensity = (charging?16:6) * this.vis;
+    this.pmat.opacity = (charging?0.85:0.45) * this.vis;
+    const arr = this.points.geometry.attributes.position.array;
+    for (let i = 0; i < this.N; i++) {
+      let x = arr[i*3], y = arr[i*3+1], z = arr[i*3+2]; const d = Math.hypot(x,y,z)||1e-3;
+      if (this.mode==="BLUE") { const k=2.6*dt; x-=x/d*k; y-=y/d*k; z-=z/d*k;
+        const ang=1.6*dt, nx=x*Math.cos(ang)-y*Math.sin(ang), ny=x*Math.sin(ang)+y*Math.cos(ang); x=nx; y=ny;
+        if (d<0.22) { this._seed(arr,i,1.6); continue; } }
+      else if (this.mode==="RED") { const k=2.8*dt; x+=x/d*k; y+=y/d*k; z+=z/d*k; if (d>1.9){this._seed(arr,i,0.18);continue;} }
+      else { const ang=0.5*dt, nx=x*Math.cos(ang)-y*Math.sin(ang), ny=x*Math.sin(ang)+y*Math.cos(ang); x=nx; y=ny;
+        x+=(Math.random()-0.5)*0.008; y+=(Math.random()-0.5)*0.008; if (d>1.5||d<0.4){this._seed(arr,i,0.9);continue;} }
+      arr[i*3]=x; arr[i*3+1]=y; arr[i*3+2]=z;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+  }
+}
+const fxMap = { Left: new HandFX(), Right: new HandFX() };
+
+const infinityMat = new THREE.ShaderMaterial({
+  transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 } },
+  vertexShader: `varying vec3 vN; varying vec3 vView;
+    void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0);
+      vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `uniform float uTime; uniform float uOpacity; varying vec3 vN; varying vec3 vView;
+    void main(){ float fres=pow(1.0-abs(dot(vN,vView)),2.6);
+      float sh=0.5+0.5*sin(uTime*2.0+vN.x*9.0+vN.y*7.0+vN.z*5.0);
+      vec3 c=mix(vec3(0.18,0.45,1.0),vec3(0.65,0.85,1.0),sh);
+      gl_FragColor=vec4(c, fres*uOpacity*(0.55+0.45*sh)); }`,
+});
+const infinitySphere = new THREE.Mesh(new THREE.SphereGeometry(4.3, 48, 48), infinityMat);
+scene.add(infinitySphere); let infinityOn = false;
+
+class DebrisField {
+  constructor(n) {
+    this.items = [];
+    const geos = [new THREE.DodecahedronGeometry(0.22,0), new THREE.IcosahedronGeometry(0.2,0), new THREE.OctahedronGeometry(0.24,0)];
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(geos[i%geos.length], new THREE.MeshStandardMaterial({ color: 0x8893a6, roughness: 0.85, metalness: 0.15, flatShading: true }));
+      scene.add(m);
+      const it = { m, vel: new THREE.Vector3(), av: new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).multiplyScalar(2), alive: true, scale: 0, target: 1, respawn: 0 };
+      this._place(it); this.items.push(it);
+    }
+  }
+  _place(it) { it.m.position.set((Math.random()*2-1)*halfW*0.9,(Math.random()*2-1)*halfH*0.8,(Math.random()*2-1)*1.5);
+    it.vel.set((Math.random()-0.5)*0.4,(Math.random()-0.5)*0.4,0); it.scale=0; it.target=0.7+Math.random()*0.7; it.alive=true; it.m.visible=true; }
+  pop(it, color) { burstAt(it.m.position, color, 14); it.alive=false; it.m.visible=false; it.respawn=performance.now()+700+Math.random()*1400; }
+  update(dt, sources, beamInfo) {
+    for (const it of this.items) {
+      if (!it.alive) { if (performance.now()>it.respawn) this._place(it); continue; }
+      it.scale += (it.target-it.scale)*0.12; it.m.scale.setScalar(it.scale);
+      for (const s of sources) {
+        const dir = new THREE.Vector3().subVectors(s.pos, it.m.position), d = dir.length()||1e-3;
+        if (s.mode==="BLUE" && d<3.2) { it.vel.addScaledVector(dir,(3.2-d)/3.2*7*dt/d); if (d<0.5){this.pop(it,COL.BLUE);break;} }
+        else if (s.mode==="RED" && d<2.8) { it.vel.addScaledVector(dir,-(2.8-d)/2.8*16*dt/d); }
+      }
+      if (!it.alive) continue;
+      if (beamInfo.on && beamInfo.fire>0.4) {
+        const rel = new THREE.Vector3().subVectors(it.m.position, beamInfo.pos);
+        if (rel.z<0.6 && rel.z>-26 && Math.hypot(rel.x,rel.y)<1.1+beamInfo.fire) { this.pop(it,COL.PURPLE); continue; }
+      }
+      it.vel.x += (Math.random()-0.5)*0.25*dt; it.vel.y += (Math.random()-0.5)*0.25*dt;
+      it.vel.multiplyScalar(0.985); it.m.position.addScaledVector(it.vel, dt);
+      it.m.rotation.x += it.av.x*dt; it.m.rotation.y += it.av.y*dt;
+      if (Math.abs(it.m.position.x)>halfW){it.vel.x*=-0.5;it.m.position.x=Math.sign(it.m.position.x)*halfW;}
+      if (Math.abs(it.m.position.y)>halfH){it.vel.y*=-0.5;it.m.position.y=Math.sign(it.m.position.y)*halfH;}
+      if (Math.abs(it.m.position.z)>2) it.vel.z*=-0.5;
+    }
+  }
+}
+const debris = new DebrisField(13);
+
+const beam = new THREE.Group(); const beamLen = 26;
+const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,beamLen,24,1,true),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+const beamGlow = new THREE.Mesh(new THREE.CylinderGeometry(1.0,0.7,beamLen,24,1,true),
+  new THREE.MeshBasicMaterial({ color: COL.PURPLE, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+[beamCore, beamGlow].forEach(m => { m.rotation.x = Math.PI/2; m.position.z = -beamLen/2; beam.add(m); });
+const beamHead = new THREE.Mesh(new THREE.SphereGeometry(0.9,24,24),
+  new THREE.MeshBasicMaterial({ color: COL.PURPLE, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+beam.add(beamHead);
+const beamLight = new THREE.PointLight(COL.PURPLE, 0, 30); beam.add(beamLight);
+beam.visible = false; scene.add(beam); let fire = 0;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.1, 0.6, 0.55);
+composer.addPass(bloom); composer.addPass(new OutputPass()); let bloomOn = true;
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (k === "b") bloomOn = !bloomOn;
+  if (k === "i") { infinityOn = !infinityOn; const el = $("infstate");
+    el.textContent = "infinity: " + (infinityOn?"on":"off"); el.classList.toggle("on", infinityOn); }
+});
+addEventListener("resize", () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); computeBounds();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
+
+// ======================= CLASSIFIER (ported from Python) ================= //
+class LowPass { constructor(){ this.y = null; } f(x, a){ this.y = this.y==null ? x : a*x+(1-a)*this.y; return this.y; } }
+class OneEuro {
+  constructor(mincutoff=1, beta=0.02, dcutoff=1){ this.freq=30; this.mincutoff=mincutoff; this.beta=beta; this.dcutoff=dcutoff;
+    this.x=new LowPass(); this.dx=new LowPass(); this.lastT=null; this.lastX=null; }
+  alpha(c){ const tau=1/(2*Math.PI*c); return 1/(1+tau*this.freq); }
+  filter(x, t){ if (this.lastT!=null){ const dt=t-this.lastT; if (dt>1e-6) this.freq=1/dt; } this.lastT=t;
+    const prev=this.lastX==null?x:this.lastX, dx=(x-prev)*this.freq; this.lastX=x;
+    const edx=this.dx.f(dx, this.alpha(this.dcutoff)), cutoff=this.mincutoff+this.beta*Math.abs(edx);
+    return this.x.f(x, this.alpha(cutoff)); }
+}
+const WRIST = 0, THUMB_TIP = 4, TIPS = [8,12,16,20], PIPS = [6,10,14,18], PALM = [0,5,9,13,17];
+const CIRCLE_RATIO = 0.5, MERGE_DIST = 0.24, DOMAIN_DIST = 0.30, DOMAIN_SECONDS = 1.0;
+const d2 = (a, b) => Math.hypot(a.x-b.x, a.y-b.y);
+class Gojo {
+  constructor(){ this.filters = {}; this.domainTimer = 0; }
+  closed(lm, tip, pip){ return d2(lm[tip], lm[WRIST]) < d2(lm[pip], lm[WRIST]); }
+  smooth(side, x, y, t){ if (!this.filters[side]) this.filters[side] = [new OneEuro(1.2,0.03), new OneEuro(1.2,0.03)];
+    const f = this.filters[side]; return [f[0].filter(x,t), f[1].filter(y,t)]; }
+  classifyHand(lm){
+    const palm = Math.max(1e-4, d2(lm[WRIST], lm[9]));
+    const ratio = d2(lm[THUMB_TIP], lm[8]) / palm;
+    const cl = TIPS.map((tp,i) => this.closed(lm, tp, PIPS[i]));
+    const nc = cl.reduce((a,b) => a + (b?1:0), 0);
+    let pose;
+    if (ratio < CIRCLE_RATIO && nc <= 1) pose = "CIRCLE";
+    else if (nc >= 3) pose = "FIST";
+    else if ((4 - nc) >= 3) pose = "PALM";
+    else pose = "IDLE";
+    const cx = PALM.reduce((s,i) => s + lm[i].x, 0) / PALM.length;
+    const cy = PALM.reduce((s,i) => s + lm[i].y, 0) / PALM.length;
+    return { pose, cx, cy };
+  }
+  process(landmarksList, handedList, t, dt){
+    const hands = [];
+    for (let i = 0; i < landmarksList.length; i++) {
+      const lm = landmarksList[i].map(p => ({ x: 1 - p.x, y: p.y, z: p.z }));  // mirror to selfie view
+      const { pose, cx, cy } = this.classifyHand(lm);
+      let side = handedList[i]?.[0]?.categoryName || "?";
+      side = side === "Left" ? "Right" : side === "Right" ? "Left" : side;     // mirror handedness
+      const [sx, sy] = this.smooth(side, cx, cy, t);
+      hands.push({ side, x: sx, y: sy, pose });
+    }
+    let combo = null, separation = null, domain_charge = 0;
+    if (hands.length === 2) {
+      const [a, b] = hands;
+      separation = Math.hypot(a.x - b.x, a.y - b.y);
+      const poses = new Set([a.pose, b.pose]);
+      const hasBlue = poses.has("CIRCLE"), hasRed = poses.has("PALM"), bothFist = a.pose === "FIST" && b.pose === "FIST";
+      if (hasBlue && hasRed && separation < MERGE_DIST) { combo = "PURPLE"; this.domainTimer = 0; }
+      else if (bothFist && separation < DOMAIN_DIST) { this.domainTimer += dt;
+        domain_charge = Math.min(1, this.domainTimer / DOMAIN_SECONDS);
+        if (this.domainTimer >= DOMAIN_SECONDS) combo = "DOMAIN"; }
+      else this.domainTimer = 0;
+    } else this.domainTimer = 0;
+    return { hands, combo, separation, domain_charge };
+  }
+}
+const gojo = new Gojo();
+
+// ======================= STATE / APPLY =================================== //
+const ST = { combo: null, domainCharge: 0, midpoint: new THREE.Vector3(), shake: 0 };
+let prevCombo = null;
+function applyState(st) {
+  const seen = {}; (st.hands || []).forEach(h => { seen[h.side] = h; });
+  ["Left", "Right"].forEach(side => {
+    const fx = fxMap[side], h = seen[side];
+    let mode = "OFF", energy = "none", txt = "—";
+    if (h) {
+      if (h.pose === "CIRCLE") { mode = "BLUE"; energy = "BLUE"; txt = "BLUE · attract"; }
+      else if (h.pose === "PALM") { mode = "RED"; energy = "RED"; txt = "RED · repel"; }
+      else if (h.pose === "FIST") { txt = "fist"; }
+      fx.targetPos.copy(palmToWorld(h.x, h.y));
+    }
+    fx.present = !!h; fx.setMode(mode);
+    const el = $("e-" + side); el.textContent = txt; el.className = "e " + energy;
+  });
+  if (seen.Left && seen.Right)
+    ST.midpoint.copy(palmToWorld((seen.Left.x + seen.Right.x)/2, (seen.Left.y + seen.Right.y)/2));
+  ST.combo = st.combo; ST.domainCharge = st.domain_charge || 0;
+
+  const n = (st.hands || []).length;
+  $("track-txt").textContent = n ? (n + (n === 1 ? " hand" : " hands")) : "no hands";
+
+  $("banner").classList.toggle("on", st.combo === "PURPLE");
+  const domainOn = st.combo === "DOMAIN";
+  $("domain").classList.toggle("on", domainOn);
+  document.body.classList.toggle("domain", domainOn);
+  const charging = ST.domainCharge > 0.02 && !domainOn;
+  $("charge").classList.toggle("on", charging);
+  if (charging) $("dial").style.setProperty("--p", (ST.domainCharge * 100).toFixed(0));
+
+  if (st.combo !== prevCombo) {
+    if (st.combo === "PURPLE") { audio.boom({ f0: 180, f1: 45, dur: 1.0, vol: 0.95, nf0: 3000, nf1: 200, nvol: 0.55 }); audio.beam(true); }
+    if (prevCombo === "PURPLE") audio.beam(false);
+    if (st.combo === "DOMAIN") audio.domain(true);
+    if (prevCombo === "DOMAIN") audio.domain(false);
+    prevCombo = st.combo;
+  }
+}
+
+// ======================= DETECTION + LOOP ================================ //
+let landmarker = null, running = false, lastVideoTime = -1, lastDet = null;
+function detect() {
+  if (!running || !landmarker || video.readyState < 2) return;
+  if (video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let res; try { res = landmarker.detectForVideo(video, performance.now()); } catch (_) { return; }
+  const now = performance.now() / 1000, ddt = lastDet ? Math.min(now - lastDet, 0.1) : 0.016; lastDet = now;
+  applyState(gojo.process(res.landmarks || [], res.handedness || [], now, ddt));
+}
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  detect();
+
+  fxMap.Left.update(dt); fxMap.Right.update(dt);
+
+  let blueAmt = 0, redAmt = 0;
+  for (const side of ["Left", "Right"]) { const fx = fxMap[side];
+    if (fx.mode === "BLUE") blueAmt = Math.max(blueAmt, fx.vis);
+    if (fx.mode === "RED") redAmt = Math.max(redAmt, fx.vis); }
+  audio.setCharge(blueAmt, redAmt);
+
+  const sources = [];
+  for (const side of ["Left", "Right"]) { const fx = fxMap[side];
+    if (fx.present && fx.vis > 0.5 && (fx.mode === "BLUE" || fx.mode === "RED"))
+      sources.push({ pos: fx.group.position, mode: fx.mode }); }
+  debris.update(dt, sources, { on: beam.visible, pos: ST.midpoint, fire });
+
+  fire += ((ST.combo === "PURPLE" ? 1 : 0) - fire) * 0.16;
+  beam.visible = fire > 0.02;
+  if (beam.visible) {
+    beam.position.copy(ST.midpoint); const r = 0.5 + fire;
+    beamGlow.scale.set(r,1,r); beamCore.scale.set(fire,1,fire); beamHead.scale.setScalar(fire*1.2);
+    beamGlow.material.opacity = 0.45*fire; beamCore.material.opacity = 0.95*fire; beamLight.intensity = 40*fire;
+    ST.shake = Math.max(ST.shake, fire*0.4);
+  }
+  if (ST.combo === "DOMAIN") ST.shake = Math.max(ST.shake, 0.25);
+
+  infinityMat.uniforms.uTime.value += dt;
+  infinityMat.uniforms.uOpacity.value += ((infinityOn ? 1 : 0) - infinityMat.uniforms.uOpacity.value) * 0.08;
+  infinitySphere.visible = infinityMat.uniforms.uOpacity.value > 0.01;
+  infinitySphere.rotation.y += dt * 0.1;
+
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i], arr = b.pts.geometry.attributes.position.array;
+    for (let k = 0; k < b.v.length; k++) { arr[k*3]+=b.v[k].x*dt; arr[k*3+1]+=b.v[k].y*dt; arr[k*3+2]+=b.v[k].z*dt; b.v[k].multiplyScalar(0.92); }
+    b.pts.geometry.attributes.position.needsUpdate = true;
+    b.life -= dt*1.6; b.pts.material.opacity = Math.max(0, b.life);
+    if (b.life <= 0) { scene.remove(b.pts); b.pts.geometry.dispose(); bursts.splice(i,1); }
+  }
+
+  if (ST.shake > 0.001) { ST.shake *= 0.9; camera.position.x = (Math.random()-0.5)*ST.shake; camera.position.y = (Math.random()-0.5)*ST.shake; }
+  else { camera.position.x = camera.position.y = 0; }
+
+  bloom.strength = 1.1 + fire*1.2 + (ST.combo === "DOMAIN" ? 0.8 : 0);
+  if (bloomOn) composer.render(); else renderer.render(scene, camera);
+}
+animate();
+
+// ======================= STARTUP ========================================= //
+const MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+async function loadModel() {
+  const vision = await FilesetResolver.forVisionTasks(WASM);
+  const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate },
+    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+  try { landmarker = await HandLandmarker.createFromOptions(vision, opts("GPU")); }
+  catch (_) { landmarker = await HandLandmarker.createFromOptions(vision, opts("CPU")); }
+}
+async function startCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false });
+  video.srcObject = stream; await video.play();
+}
+const enterBtn = $("enterBtn");
+async function begin() {
+  enterBtn.disabled = true; enterBtn.textContent = "STARTING…";
+  try {
+    audio.init();
+    await startCamera();
+    running = true;
+    $("dot").classList.add("on"); $("track-txt").textContent = "no hands";
+    $("enter").classList.add("hidden");
+  } catch (e) {
+    $("enter-msg").textContent = "Camera access is required — allow it, then click Begin. (" + (e.name || e) + ")";
+    enterBtn.disabled = false; enterBtn.textContent = "BEGIN";
+  }
+}
+enterBtn.addEventListener("click", begin);
+loadModel()
+  .then(() => { enterBtn.disabled = false; enterBtn.textContent = "BEGIN"; $("enter-msg").textContent = "Allow camera access when prompted."; })
+  .catch((e) => { $("enter-msg").textContent = "Failed to load hand model: " + (e.message || e); });
+</script>
+</body>
+</html>
