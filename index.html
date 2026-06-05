@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#02040a" />
 <title>Limitless — Gojo VFX (browser)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,8 +17,11 @@
     --panel: rgba(8, 12, 22, 0.6); --line: rgba(120, 160, 255, 0.3);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #02040a; }
-  body { font-family: "JetBrains Mono", monospace; color: var(--ink); }
+  html, body { width: 100%; height: 100%; height: 100dvh; overflow: hidden; background: #02040a;
+               overscroll-behavior: none; }
+  body { font-family: "JetBrains Mono", monospace; color: var(--ink);
+         -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+         touch-action: none; }
   #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
         transform: scaleX(-1); filter: brightness(0.5) saturate(0.8); transition: filter .6s; }
   body.domain #bg { filter: invert(1) brightness(0.45) contrast(1.2) saturate(0); }
@@ -103,6 +110,49 @@
   #enterBtn:disabled { opacity: 0.4; cursor: default; }
   #enterBtn:not(:disabled):hover { transform: translateY(-2px); }
   #enter .hint { font-size: 10.5px; letter-spacing: 1px; color: rgba(219,230,255,0.45); margin-top: 10px; }
+
+  /* ---- on-screen touch controls (revealed on touch / small screens once live) ---- */
+  #touch { position: fixed; z-index: 7; display: none; gap: 10px; pointer-events: none; }
+  .tbtn { pointer-events: auto; -webkit-appearance: none; appearance: none;
+          font-family: "Chakra Petch"; font-weight: 700; font-size: 12px; letter-spacing: 2px;
+          color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+          backdrop-filter: blur(3px); padding: 13px 16px; cursor: pointer; outline: none;
+          display: flex; align-items: center; gap: 8px; transition: transform .12s, background .15s, color .15s, box-shadow .15s; }
+  .tbtn .sym { font-size: 15px; line-height: 1; }
+  .tbtn .cap { font-size: 9px; opacity: 0.7; letter-spacing: 2px; }
+  .tbtn:active { transform: scale(0.95); }
+  .tbtn.active { color: #02040a; background: var(--blue); border-color: var(--blue);
+                 box-shadow: 0 0 16px rgba(77,181,255,0.55); }
+  .tbtn.active .cap { opacity: 0.9; }
+
+  @media (pointer: coarse), (max-width: 640px) {
+    body.live #touch { display: flex; flex-direction: row; left: 50%;
+                       transform: translateX(-50%);
+                       bottom: calc(16px + env(safe-area-inset-bottom)); }
+    #controls { display: none; }
+    .panel { padding: 8px 11px; backdrop-filter: blur(2px); }
+    .label { font-size: 9px; letter-spacing: 1.5px; }
+    #channel { top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); min-width: 0; }
+    #channel .hrow { font-size: 11px; margin-top: 6px; }
+    #trackpanel { top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); min-width: 0; }
+    #legend { left: 50%; right: auto; transform: translateX(-50%);
+              bottom: calc(86px + env(safe-area-inset-bottom));
+              flex-wrap: wrap; white-space: normal; gap: 4px 12px; font-size: 10px;
+              justify-content: center; width: max-content; max-width: 80vw; padding: 8px 12px; }
+    #banner { top: 14%; } #banner .jp { font-size: 30px; letter-spacing: 5px; }
+    #banner .en { font-size: 12px; letter-spacing: 4px; }
+    #domain .jp { font-size: 44px; letter-spacing: 7px; }
+    #domain .en { font-size: 11px; letter-spacing: 5px; }
+    #charge .dial { width: 124px; height: 124px; }
+    #enter .jp { font-size: 22px; letter-spacing: 6px; }
+    #enter .title { font-size: 40px; letter-spacing: 6px; }
+  }
+  @media (max-width: 400px) {
+    #legend { max-width: 90vw; font-size: 9px; }
+    #banner .jp { font-size: 24px; }
+    #domain .jp { font-size: 34px; letter-spacing: 5px; }
+    #enter .title { font-size: 32px; }
+  }
 </style>
 </head>
 <body>
@@ -131,6 +181,11 @@
       <div><b style="color:var(--purple)">Blue+Red together</b> → Purple</div>
       <div><b>both fists, hold</b> → Domain</div>
     </div>
+  </div>
+
+  <div id="touch">
+    <button class="tbtn" id="btn-inf" type="button"><span class="sym">無</span><span class="cap">INFINITY</span></button>
+    <button class="tbtn" id="btn-bloom" type="button"><span class="sym">✦</span><span class="cap">BLOOM</span></button>
   </div>
 
   <div id="banner"><div class="jp">虚式「茈」</div><div class="en">HOLLOW TECHNIQUE: PURPLE</div></div>
@@ -167,6 +222,15 @@ import { FilesetResolver, HandLandmarker }
 const COL = { BLUE: 0x4db5ff, RED: 0xff4d4d, PURPLE: 0xb079ff, IDLE: 0x9fc2ff };
 const $ = (id) => document.getElementById(id);
 
+// ---- device / performance profile ----
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent)
+  || (matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) < 900);
+const PERF = {
+  pixelRatio: IS_MOBILE ? 1.5 : 2,
+  particles:  IS_MOBILE ? 140 : 260,
+  debris:     IS_MOBILE ? 8   : 13,
+};
+
 // ======================= AUDIO ========================================== //
 class AudioEngine {
   constructor() { this.ready = false; }
@@ -174,6 +238,7 @@ class AudioEngine {
     if (this.ctx) return;
     const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
     const ctx = this.ctx = new Ctx();
+    if (ctx.state === "suspended") ctx.resume();
     this.master = ctx.createGain(); this.master.gain.value = 0; this.master.connect(ctx.destination);
     this.master.gain.linearRampToValueAtTime(0.85, ctx.currentTime + 0.6);
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -245,7 +310,7 @@ const audio = new AudioEngine();
 // ======================= THREE.JS ======================================= //
 const canvas = $("scene"), video = $("bg");
 const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, PERF.pixelRatio));
 renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
@@ -281,7 +346,7 @@ class HandFX {
       new THREE.MeshBasicMaterial({ color: COL.IDLE, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.light = new THREE.PointLight(COL.IDLE, 0, 6);
     this.group.add(this.orb, this.halo, this.light);
-    this.N = 260; this.pos = new Float32Array(this.N * 3);
+    this.N = PERF.particles; this.pos = new Float32Array(this.N * 3);
     for (let i = 0; i < this.N; i++) this._seed(this.pos, i, 1.4);
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(this.pos, 3));
     this.pmat = new THREE.PointsMaterial({ color: COL.IDLE, size: 0.05, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -371,7 +436,7 @@ class DebrisField {
     }
   }
 }
-const debris = new DebrisField(13);
+const debris = new DebrisField(PERF.debris);
 
 const beam = new THREE.Group(); const beamLen = 26;
 const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,beamLen,24,1,true),
@@ -389,14 +454,33 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.1, 0.6, 0.55);
 composer.addPass(bloom); composer.addPass(new OutputPass()); let bloomOn = true;
+function syncControlUI() {
+  const el = $("infstate");
+  el.textContent = "infinity: " + (infinityOn ? "on" : "off");
+  el.classList.toggle("on", infinityOn);
+  $("btn-inf").classList.toggle("active", infinityOn);
+  $("btn-bloom").classList.toggle("active", bloomOn);
+}
+function toggleInfinity() { infinityOn = !infinityOn; syncControlUI(); }
+function toggleBloom()    { bloomOn = !bloomOn; syncControlUI(); }
 addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
-  if (k === "b") bloomOn = !bloomOn;
-  if (k === "i") { infinityOn = !infinityOn; const el = $("infstate");
-    el.textContent = "infinity: " + (infinityOn?"on":"off"); el.classList.toggle("on", infinityOn); }
+  if (k === "b") toggleBloom();
+  if (k === "i") toggleInfinity();
 });
-addEventListener("resize", () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); computeBounds();
-  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
+$("btn-inf").addEventListener("click", toggleInfinity);
+$("btn-bloom").addEventListener("click", toggleBloom);
+syncControlUI();
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); computeBounds();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+}
+addEventListener("resize", resize);
+addEventListener("orientationchange", () => setTimeout(resize, 250));
+if (window.visualViewport) visualViewport.addEventListener("resize", resize);
+// block iOS pinch-zoom gestures (kept off the canvas experience)
+["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault()));
 
 // ======================= CLASSIFIER (ported from Python) ================= //
 class LowPass { constructor(){ this.y = null; } f(x, a){ this.y = this.y==null ? x : a*x+(1-a)*this.y; return this.y; } }
@@ -566,15 +650,43 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/h
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 async function loadModel() {
   const vision = await FilesetResolver.forVisionTasks(WASM);
-  const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate },
-    runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
-  try { landmarker = await HandLandmarker.createFromOptions(vision, opts("GPU")); }
-  catch (_) { landmarker = await HandLandmarker.createFromOptions(vision, opts("CPU")); }
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: MODEL, delegate },
+    runningMode: "VIDEO", numHands: 2,
+    minHandDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.6
+  });
+  const isMobile = IS_MOBILE;
+  try {
+    landmarker = await HandLandmarker.createFromOptions(vision, opts(isMobile ? "CPU" : "GPU"));
+  } catch (_) {
+    landmarker = await HandLandmarker.createFromOptions(vision, opts("CPU"));
+  }
 }
 async function startCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false });
+  const ideal = IS_MOBILE
+    ? { width: { ideal: 960 }, height: { ideal: 540 } }
+    : { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const tries = [
+    { video: { ...ideal, facingMode: { ideal: "user" } }, audio: false },
+    { video: { facingMode: "user" }, audio: false },
+    { video: true, audio: false },
+  ];
+  let stream, lastErr;
+  for (const c of tries) {
+    try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+    catch (e) { lastErr = e; }
+  }
+  if (!stream) throw lastErr;
   video.srcObject = stream; await video.play();
 }
+let wakeLock = null;
+async function requestWakeLock() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running) requestWakeLock();
+});
 const enterBtn = $("enterBtn");
 async function begin() {
   enterBtn.disabled = true; enterBtn.textContent = "STARTING…";
@@ -582,6 +694,8 @@ async function begin() {
     audio.init();
     await startCamera();
     running = true;
+    document.body.classList.add("live");
+    requestWakeLock();
     $("dot").classList.add("on"); $("track-txt").textContent = "no hands";
     $("enter").classList.add("hidden");
   } catch (e) {
