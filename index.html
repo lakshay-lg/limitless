@@ -495,6 +495,7 @@ class OneEuro {
 }
 const WRIST = 0, THUMB_TIP = 4, TIPS = [8,12,16,20], PIPS = [6,10,14,18], PALM = [0,5,9,13,17];
 const CIRCLE_RATIO = 0.5, MERGE_DIST = 0.24, DOMAIN_DIST = 0.30, DOMAIN_SECONDS = 1.0;
+const REF_ASPECT = 16 / 9;  // thresholds were tuned on a 16:9 frame
 const d2 = (a, b) => Math.hypot(a.x-b.x, a.y-b.y);
 class Gojo {
   constructor(){ this.filters = {}; this.domainTimer = 0; }
@@ -528,7 +529,13 @@ class Gojo {
     let combo = null, separation = null, domain_charge = 0;
     if (hands.length === 2) {
       const [a, b] = hands;
-      separation = Math.hypot(a.x - b.x, a.y - b.y);
+      // Landmark x/y are normalized to the camera frame's own width/height. On a
+      // portrait phone frame the x-axis is squeezed, which inflates horizontal
+      // distance and blocks the two-hand combos. Scale x back to the 16:9 space
+      // the thresholds were tuned in, so desktop is unchanged and portrait works.
+      const vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+      const xScale = (vw / vh) / REF_ASPECT;
+      separation = Math.hypot((a.x - b.x) * xScale, a.y - b.y);
       const poses = new Set([a.pose, b.pose]);
       const hasBlue = poses.has("CIRCLE"), hasRed = poses.has("PALM"), bothFist = a.pose === "FIST" && b.pose === "FIST";
       if (hasBlue && hasRed && separation < MERGE_DIST) { combo = "PURPLE"; this.domainTimer = 0; }
@@ -650,11 +657,13 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/h
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 async function loadModel() {
   const vision = await FilesetResolver.forVisionTasks(WASM);
+  const conf = IS_MOBILE ? 0.45 : 0.6;  // close-together hands are harder to keep as 2 detections
   const opts = (delegate) => ({
     baseOptions: { modelAssetPath: MODEL, delegate },
     runningMode: "VIDEO", numHands: 2,
-    minHandDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6
+    minHandDetectionConfidence: conf,
+    minHandPresenceConfidence: conf,
+    minTrackingConfidence: conf
   });
   const isMobile = IS_MOBILE;
   try {
