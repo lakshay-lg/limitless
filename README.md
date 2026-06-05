@@ -88,15 +88,6 @@ python -m http.server 5500
 
 Then open <http://localhost:5500>. (`localhost` is treated as a secure origin, so the camera works without HTTPS.)
 
-## Deploy to GitHub Pages
-
-1. Put `index.html` at the **root** of a public repo.
-2. **Settings → Pages → Build and deployment → Source: Deploy from a branch.**
-3. Select your branch (`main`) and folder `/ (root)`, then **Save**.
-4. After a minute it's live at `https://YOUR-USERNAME.github.io/REPO-NAME/`.
-
-GitHub Pages serves it over HTTPS automatically, which the camera requires. No server or build configuration is needed.
-
 ## Configuration / tuning
 
 All tunables live near the top of the classifier section in `index.html`:
