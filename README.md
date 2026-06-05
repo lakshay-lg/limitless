@@ -4,7 +4,7 @@ A real-time, in-browser VFX sandbox where your **hands cast Gojo Satoru's techni
 
 > Built with MediaPipe hand tracking (WebAssembly) + Three.js. A single static `index.html`.
 
-**[▶ Live demo](https://YOUR-USERNAME.github.io/REPO-NAME/)** · needs a webcam · runs 100% client-side
+**[▶ Live demo](https://limitless.lakshay.app/)** · needs a webcam · runs 100% client-side
 
 <!-- Replace the line below with a screenshot or GIF: drop an image in the repo and reference it. -->
 <!-- ![Demo](demo.gif) -->
